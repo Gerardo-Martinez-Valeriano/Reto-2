@@ -9,6 +9,7 @@ from src.data_processing import (
     load_source_tables,
 )
 from src.sections import (
+    render_ai_qna_view,
     render_api_security_view,
     render_customers_view,
     render_executive_view,
@@ -50,14 +51,16 @@ def main() -> None:
 
         render_sidebar_status(df, filtered_df)
 
-        if filtered_df.empty and selected_view != "API y seguridad básica":
+        views_without_stop = {"API y seguridad básica", "Consulta asistida por IA"}
+
+        if filtered_df.empty and selected_view not in views_without_stop:
             st.warning(
                 "No hay datos para la combinación de filtros seleccionada. "
                 "Ajusta los filtros e inténtalo de nuevo."
             )
             st.stop()
 
-        if selected_view != "API y seguridad básica":
+        if selected_view not in {"API y seguridad básica"}:
             render_filter_status(df, filtered_df, active_filters, filters["top_n"])
 
         views_map = {
@@ -67,6 +70,11 @@ def main() -> None:
             "Clientes y segmentos": lambda data: render_customers_view(data, filters["top_n"]),
             "Exploración tabular": lambda data: render_table_view(data),
             "API y seguridad básica": lambda data: render_api_security_view(),
+            "Consulta asistida por IA": lambda data: render_ai_qna_view(
+                data,
+                active_filters=active_filters,
+                top_n=filters["top_n"]
+            ),
         }
 
         views_map[selected_view](filtered_df)

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 APP_TITLE = "Dashboard Retail + IA"
-APP_SUBTITLE = "Día 6 · Introducción a APIs y seguridad básica"
+APP_SUBTITLE = "Día 7 · Integración básica del LLM en modo pregunta-respuesta"
 
 EXPECTED_SHEETS = ("Customers", "Products", "Stores", "Transactions")
 
@@ -12,6 +12,7 @@ VIEWS = (
     "Clientes y segmentos",
     "Exploración tabular",
     "API y seguridad básica",
+    "Consulta asistida por IA",
 )
 
 DEFAULT_TOP_N = 10

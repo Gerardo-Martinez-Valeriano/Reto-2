@@ -379,3 +379,77 @@ def get_quality_summary(df: pd.DataFrame) -> pd.DataFrame:
 def get_numeric_summary(df: pd.DataFrame) -> pd.DataFrame:
     numeric_summary = df.select_dtypes(include="number").describe().T.reset_index()
     return numeric_summary.rename(columns={"index": "columna"})
+
+
+def build_dashboard_context_bundle(df: pd.DataFrame, active_filters: list[str], top_n: int) -> dict:
+    metrics = get_executive_metrics(df)
+    category_sales = get_sales_by_category(df).head(min(top_n, 5))
+    region_profit = get_profit_by_region(df).head(min(top_n, 5))
+    product_summary = get_product_summary(df).head(min(top_n, 5))
+    customer_summary = get_customer_summary(df).head(min(top_n, 5))
+
+    date_min = df["TransactionDate"].min().date()
+    date_max = df["TransactionDate"].max().date()
+
+    filters_text = " | ".join(active_filters) if active_filters else "Sin filtros específicos"
+
+    category_lines = [
+        f"- {row['Category']}: ventas netas {row['net_sales']:.2f}"
+        for _, row in category_sales.iterrows()
+    ]
+
+    region_lines = [
+        f"- {row['StoreRegion']}: utilidad {row['profit']:.2f}"
+        for _, row in region_profit.iterrows()
+    ]
+
+    product_lines = [
+        f"- {row['ProductName']}: ventas netas {row['net_sales']:.2f}, utilidad {row['profit']:.2f}"
+        for _, row in product_summary.iterrows()
+    ]
+
+    customer_label = "CustomerFullName" if "CustomerFullName" in customer_summary.columns else "CustomerID"
+    customer_lines = [
+        f"- {row[customer_label]}: ventas netas {row['net_sales']:.2f}, transacciones {int(row['transactions'])}"
+        for _, row in customer_summary.iterrows()
+    ]
+
+    context_text = f"""
+CONTEXTO DEL DASHBOARD FILTRADO
+Rango visible: {date_min} a {date_max}
+Filtros activos: {filters_text}
+
+MÉTRICAS GENERALES
+- Transacciones: {int(metrics["transactions"])}
+- Ventas netas: {metrics["net_sales"]:.2f}
+- Utilidad: {metrics["profit"]:.2f}
+- Ticket promedio: {metrics["average_ticket"]:.2f}
+
+CATEGORÍAS DESTACADAS
+{chr(10).join(category_lines) if category_lines else "- Sin datos"}
+
+REGIONES DESTACADAS
+{chr(10).join(region_lines) if region_lines else "- Sin datos"}
+
+PRODUCTOS DESTACADOS
+{chr(10).join(product_lines) if product_lines else "- Sin datos"}
+
+CLIENTES DESTACADOS
+{chr(10).join(customer_lines) if customer_lines else "- Sin datos"}
+
+INSTRUCCIÓN IMPORTANTE
+Responde solo con base en este contexto. Si la pregunta requiere un dato que no aparece aquí,
+indica con claridad que no se puede confirmar con el contexto disponible.
+""".strip()
+
+    return {
+        "metrics": metrics,
+        "date_min": date_min,
+        "date_max": date_max,
+        "filters_text": filters_text,
+        "category_sales": category_sales,
+        "region_profit": region_profit,
+        "product_summary": product_summary,
+        "customer_summary": customer_summary,
+        "context_text": context_text,
+    }

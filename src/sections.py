@@ -2,6 +2,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.data_processing import (
+    build_dashboard_context_bundle,
     get_category_quantity,
     get_customer_segment_sales,
     get_customer_summary,
@@ -19,7 +20,11 @@ from src.data_processing import (
     get_sales_by_payment,
     get_subcategory_summary,
 )
-from src.gemini_api import get_gemini_setup_status, test_gemini_connection
+from src.gemini_api import (
+    ask_gemini_about_dashboard,
+    get_gemini_setup_status,
+    test_gemini_connection,
+)
 from src.ui import format_currency, format_delta, format_number, render_mini_card
 
 
@@ -468,3 +473,79 @@ def render_api_security_view() -> None:
                     st.code(reply)
                 except Exception as error:
                     st.error(f"La prueba falló: {error}")
+
+
+def render_ai_qna_view(df, active_filters: list[str], top_n: int) -> None:
+    st.markdown('<div class="section-title">Consulta asistida por IA</div>', unsafe_allow_html=True)
+
+    if df.empty:
+        st.warning(
+            "No hay datos visibles con los filtros actuales. Ajusta los filtros antes de consultar a la IA."
+        )
+        return
+
+    status = get_gemini_setup_status()
+    context_bundle = build_dashboard_context_bundle(df, active_filters, top_n)
+
+    st.markdown(
+        """
+        <div class="info-box">
+        Esta vista permite hacer una pregunta en lenguaje natural sobre el estado actual del dashboard filtrado.
+        La respuesta se genera a partir de un resumen preparado del análisis visible en este momento.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    metric_col1.metric("Transacciones visibles", format_number(context_bundle["metrics"]["transactions"]))
+    metric_col2.metric("Ventas netas visibles", format_currency(context_bundle["metrics"]["net_sales"]))
+    metric_col3.metric("Utilidad visible", format_currency(context_bundle["metrics"]["profit"]))
+
+    question = st.text_area(
+        "Escribe tu pregunta sobre el dashboard",
+        placeholder="Ejemplo: ¿Qué categoría lidera las ventas en el subconjunto actual y qué regiones muestran mayor utilidad?"
+    )
+
+    action_col1, action_col2 = st.columns([1, 1])
+    ask_button = action_col1.button("Consultar a Gemini")
+    show_context = action_col2.checkbox("Mostrar contexto enviado al modelo")
+
+    if show_context:
+        with st.expander("Contexto resumido que se enviará al modelo", expanded=False):
+            st.code(context_bundle["context_text"])
+
+    if not status["sdk_available"] or not status["api_key_present"]:
+        st.warning(
+            "La consulta asistida por IA no está disponible en este momento. "
+            "Puedes seguir usando el resumen local del dashboard y activar la API desde la vista "
+            "'API y seguridad básica'."
+        )
+
+        st.markdown("### Resumen local disponible")
+        st.write(f"**Filtros activos:** {context_bundle['filters_text']}")
+        st.write(f"**Rango visible:** {context_bundle['date_min']} a {context_bundle['date_max']}")
+
+        st.dataframe(
+            context_bundle["category_sales"],
+            use_container_width=True,
+            hide_index=True
+        )
+        return
+
+    if ask_button:
+        if not question.strip():
+            st.warning("Escribe una pregunta antes de consultar a Gemini.")
+        else:
+            try:
+                with st.spinner("Generando respuesta..."):
+                    answer = ask_gemini_about_dashboard(
+                        question=question.strip(),
+                        dashboard_context=context_bundle["context_text"]
+                    )
+
+                st.markdown("### Respuesta de Gemini")
+                st.write(answer)
+
+            except Exception as error:
+                st.error(f"No fue posible generar la respuesta: {error}")
